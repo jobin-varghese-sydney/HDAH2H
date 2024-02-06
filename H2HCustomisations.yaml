@@ -1,0 +1,77 @@
+#Update this YAML to include both Customization and Flows along with Data migration and setting migrations
+
+name: $(Build.DefinitionName)_$(Build.DefinitionVersion)_$(Build.BuildId)_$(Build.SourceBranchName)_$(date:yyyyMMdd)
+resources:
+  repositories:
+  - repository: healthdirectaustralia/PRJ-HCC-H2H
+    type: github
+    name: healthdirectaustralia/PRJ-HCC-H2H
+    endpoint: NOM H2H  #Replace with Sevice Account Connection endpoint
+    ref: crm/development
+    pr:
+        # should only be test, crm/feature/*
+        branches:
+            include:
+            - crm/development            
+            exclude:
+            - crm/main
+            - crm/uat	
+            - crm/dev/*
+        paths:
+            include:
+            - src/HealthDirect.H2H.Release/Solutions/$(SolutionCustomisationName)/*
+        drafts: false # whether to build draft PRs, defaults to true, by default draft PR do not trigger a pipeline.
+
+jobs:
+- job: BUILD
+  displayName: H2H Customisation
+  pool:
+    vmImage: windows-latest
+  steps:
+  - checkout: self
+    clean: true
+    fetchTags: true
+  - task: PowerPlatformToolInstaller@2
+    displayName: 'Power Platform Tool Installer '
+
+    # Solution Packaging.
+  - task: PowerPlatformPackSolution@2
+    displayName: 'Power Platform Pack Solution '
+    inputs:
+      SolutionSourceFolder: src/HealthDirect.H2H.Release/Solutions/$(SolutionCustomisationName)
+      SolutionOutputFile: $(Build.ArtifactStagingDirectory)/$(SolutionCustomisationName).zip
+
+    
+    # Copying the DataMigation.
+  - task: CopyFiles@2
+    displayName: 'Copy Files to StagingDirectory: $(Build.ArtifactStagingDirectory)'
+    inputs:
+      SourceFolder: src/HealthDirect.H2H.Release/DataMigration/Schema
+      TargetFolder: $(Build.ArtifactStagingDirectory)/DataMigration/Schema
+
+   # DataMigration .zip file Creation .
+  - task: microsoft-IsvExpTools.PowerPlatform-BuildTools.export-data.PowerPlatformExportData@2
+    displayName: 'Power Platform Export Data '
+    inputs:
+      authenticationType: PowerPlatformSPN
+      PowerPlatformSPN: 'HCC-H2H-DEV'   #Sevice Account Connection endpoint to DEV-CRM
+      SchemaFile: '$(Build.ArtifactStagingDirectory)/DataMigration/Schema/data_schema.xml'
+      DataFile: '$(Build.ArtifactStagingDirectory)/DataMigration/Data/data.zip'
+      Overwrite: true
+
+      
+   #Copy the Setting file .
+  - task: CopyFiles@2
+    displayName: 'Copy Files to: $(Build.ArtifactStagingDirectory)'
+    inputs:
+      SourceFolder: src/HealthDirect.H2H.Release/PowerPlatformSettings
+      TargetFolder: $(Build.ArtifactStagingDirectory)/Settings
+      OverWrite: true
+
+  #Copy the Artifact file which include the solution, data.zip and setting.json files .
+  - task: PublishBuildArtifacts@1
+    displayName: 'Publish Artifact: drop'
+    inputs:
+      PathtoPublish: $(Build.ArtifactStagingDirectory)
+
+

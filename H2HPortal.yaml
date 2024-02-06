@@ -1,0 +1,57 @@
+#Update this YAML to include both Customization and Flows along with Data migration and setting migrations
+
+name: $(Build.DefinitionName)_$(Build.DefinitionVersion)_$(Build.BuildId)_$(Build.SourceBranchName)_$(date:yyyyMMdd)
+resources:
+  repositories:
+  - repository: healthdirectaustralia/PRJ-HCC-H2H
+    type: github
+    name: healthdirectaustralia/PRJ-HCC-H2H
+    endpoint: NOM H2H  #Replace with Sevice Account Connection endpoint
+    ref: crm/development
+    pr:
+        # should only be test, crm/feature/*
+        branches:
+            include:
+            - crm/development            
+            exclude:
+            - crm/main
+            - crm/uat	
+            - crm/dev/*
+        paths:
+            include:
+            - src/HealthDirect.H2H.Release/Solutions/$(SolutionCustomisationName)/*
+        drafts: false # whether to build draft PRs, defaults to true, by default draft PR do not trigger a pipeline.
+
+jobs:
+- job: BUILD
+  displayName: H2H PORTAL YAML
+  pool:
+    vmImage: windows-latest
+
+  steps:
+  - checkout: self
+    clean: true
+    fetchTags: true
+  - task: arpitdynamics-powerguide.PortalToolInstaller.PortalToolInstaller.Portal Tool Installer@2
+    displayName: 'Portal Tool Installer '
+
+    # Solution Packaging.
+  - task: arpitdynamics-powerguide.PortalToolInstaller.PortalExportConfiguration.Export Portal Configuration@2
+    displayName: 'Export Portal Configuration '
+    inputs:
+      D365URL: '$( CrmUrl)'
+      PortalWebsiteid: '$( WebsiteId)'
+      ApplicationId: '$( CrmUrl)'
+      ClientSecret: '$( ClientSecret)'
+      TenantId: '$( TenantId)'
+      TargetFolderAll: 'src/HealthDirect.H2H.PowerPages/PortalCode/hcc-h2h-portal'
+  
+
+  #Copy the Artifact file which include the solution, data.zip and setting.json files .
+  - task: PublishBuildArtifacts@1
+    displayName: 'Publish Artifact: drop'
+    inputs:
+      PathtoPublish: 'src/HealthDirect.H2H.PowerPages/PortalCode/hcc-h2h-portal'
+      ArtifactName: 'Portal Data'
+
+

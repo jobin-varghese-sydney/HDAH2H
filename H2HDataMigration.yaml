@@ -1,0 +1,67 @@
+name: $(Build.DefinitionName)_$(Build.DefinitionVersion)_$(Build.BuildId)_$(Build.SourceBranchName)_$(date:yyyyMMdd)
+resources:
+  repositories:
+  - repository: healthdirectaustralia/PRJ-HCC-H2H
+    type: github
+    name: healthdirectaustralia/PRJ-HCC-H2H
+    endpoint: NOM H2H  #Replace with Sevice Account Connection endpoint
+    ref: crm/development
+    pr:
+        # should only be test, crm/feature/*
+        branches:
+            include:
+            - crm/development            
+            exclude:
+            - crm/main
+            - crm/test	
+        paths:
+            include:
+            - src/HealthDirect.H2H.Release/Solutions/$(SolutionCustomisationName)/*
+        drafts: false # whether to build draft PRs, defaults to true, by default draft PR do not trigger a pipeline.
+
+jobs:
+- job: BUILD
+  displayName: H2H DataMigration for $(SolutionCustomisationName)
+  pool:
+    vmImage: windows-latest
+  steps:
+  - checkout: self
+    clean: true
+    fetchTags: true
+  - task: PowerPlatformToolInstaller@2
+    displayName: 'Power Platform Tool Installer '
+   
+  - task: CopyFiles@2
+    displayName: 'Copy Files to StagingDirectory: $(Build.ArtifactStagingDirectory)'
+    inputs:
+      SourceFolder: src/HealthDirect.H2H.Release/DataMigration/Schema
+      TargetFolder: $(Build.ArtifactStagingDirectory)/$(Build.BuildId)/DataMigration/Schema
+
+  - task: microsoft-IsvExpTools.PowerPlatform-BuildTools.export-data.PowerPlatformExportData@2
+    displayName: 'Power Platform Export Data '
+    inputs:
+      authenticationType: PowerPlatformSPN
+      PowerPlatformSPN: 'HCC-H2H-DEV'   #Sevice Account Connection endpoint to DEV-CRM
+      SchemaFile: '$(Build.ArtifactStagingDirectory)/$(Build.BuildId)/DataMigration/Schema/dataschema.xml'
+      DataFile: '$(Build.ArtifactStagingDirectory)/$(Build.BuildId)/DataMigration/Data/data.zip'
+      Overwrite: true
+
+  - task: microsoft-IsvExpTools.PowerPlatform-BuildTools.import-data.PowerPlatformImportData@2
+    displayName: 'Power Platform Import Data '
+    inputs:
+      authenticationType: PowerPlatformSPN
+      PowerPlatformSPN: 'HCC-H2H-SIT'  #Sevice Account Connection endpoint to SIT-CRM
+      DataFile: '$(Build.ArtifactStagingDirectory)/$(Build.BuildId)/DataMigration/Data/data.zip'
+      enabled: false
+ #Sevice Account Connection endpoint to UAT
+  - task: microsoft-IsvExpTools.PowerPlatform-BuildTools.import-data.PowerPlatformImportData@2
+    displayName: 'Power Platform Import Data '
+    inputs:
+      authenticationType: PowerPlatformSPN
+      PowerPlatformSPN: 'HCC-H2H-UAT'  #Sevice Account Connection endpoint to SIT-CRM
+      DataFile: '$(Build.ArtifactStagingDirectory)/$(Build.BuildId)/DataMigration/Data/data.zip'       
+      enabled: false
+
+  - task: PublishBuildArtifacts@1
+    displayName: 'Publish Artifact: drop'
+

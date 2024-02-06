@@ -1,0 +1,43 @@
+name: $(Build.DefinitionName)_$(Build.DefinitionVersion)_$(Build.BuildId)_$(Build.SourceBranchName)_$(date:yyyyMMdd)
+resources:
+  repositories:
+  - repository: healthdirectaustralia/PRJ-HCC-H2H
+    type: github
+    name: healthdirectaustralia/PRJ-HCC-H2H
+    endpoint: NOM H2H  #Replace with Sevice Account Connection endpoint
+    ref: crm/development
+    pr:
+        # should only be test, crm/feature/*
+        branches:
+            include:
+            - crm/development            
+            exclude:
+            - crm/main
+            - crm/uat	
+            - crm/dev/*
+        paths:
+            include:
+            - src/HealthDirect.H2H.Release/Solutions/$(SolutionCustomisationName)/*
+        drafts: false # whether to build draft PRs, defaults to true, by default draft PR do not trigger a pipeline.
+
+jobs:
+- job: BUILD
+  displayName: H2H Customisation
+  pool:
+    vmImage: windows-latest
+  steps:
+  - checkout: self
+    clean: true
+    fetchTags: true
+
+  - task: PowerPlatformToolInstaller@2
+    displayName: 'Power Platform Tool Installer '
+
+  - task: PowerPlatformPackSolution@2
+    displayName: 'Power Platform Pack Solution '
+    inputs:
+      SolutionSourceFolder: src/HealthDirect.H2H.Release/Solutions/$(SolutionCustomisationName)
+      SolutionOutputFile: $(Build.ArtifactStagingDirectory)/$(SolutionCustomisationName).zip  -  
+  - task: PublishBuildArtifacts@1
+    displayName: 'Publish Artifact: drop'
+
